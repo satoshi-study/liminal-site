@@ -409,10 +409,13 @@ h2::after {
 .menu .row b { font-size: 1.2rem; font-weight: 600; letter-spacing: .14em; white-space: nowrap; }
 .menu .row i { flex: 1; border-bottom: 1px dotted rgba(26, 27, 58, .55); transform: translateY(-.35em); }
 .menu .row span { font-size: 1.05rem; white-space: nowrap; }
-.menu .plan ul { margin-top: .3rem; font-size: .92rem; line-height: 1.95; }
-.menu .plan li { padding-left: 1em; text-indent: -1em; }
-.menu .plan li::before { content: "・"; }
-.menu .fine + .fine { margin-top: .7rem; padding-top: 0; border-top: 0; }
+.menu .plan dl { margin: .5rem 0 0; font-size: .92rem; line-height: 1.85; }
+.menu .plan dl > div { display: grid; grid-template-columns: 6.2em 1fr; column-gap: .9rem; padding: .28rem 0; border-top: 1px solid rgba(26, 27, 58, .1); }
+.menu .plan dl > div:first-child { border-top: 0; }
+.menu .plan dt { color: #6a6880; letter-spacing: .06em; }
+.menu .plan dd small { font-size: .85em; color: #6a6880; white-space: nowrap; }
+.menu .fine li { padding-left: 1em; text-indent: -1em; }
+.menu .fine li::before { content: "・"; }
 .menu .fine {
   margin-top: 1.9rem;
   padding-top: 1.2rem;
@@ -615,40 +618,49 @@ footer p { margin-top: .9rem; }
     <div class="menu">
       <div class="plan">
         <p class="row"><b>無料</b><i></i><span>0円</span></p>
-        <ul>
-          <li>会話 1日10往復（月300往復）</li>
-          <li>繰り越しで1日最大20往復</li>
-          <li>会話の記憶は直近5回の来店分</li>
-          <li>チェキ券 月1枚</li>
-        </ul>
+        <dl>
+          <div><dt>会話</dt><dd>1日10往復<small>（月300往復）</small></dd></div>
+          <div><dt>1日最大</dt><dd>20往復<small>（繰り越し込み）</small></dd></div>
+          <div><dt>延長</dt><dd>広告を見ると1回5往復、1日3回まで</dd></div>
+          <div><dt>会話の記憶</dt><dd>直近5回の来店分</dd></div>
+          <div><dt>チェキ券</dt><dd>月1枚</dd></div>
+        </dl>
       </div>
       <div class="plan">
         <p class="row"><b>スタンダード</b><i></i><span>月額 1,480円</span></p>
-        <ul>
-          <li>会話 1日60往復（月1,800往復）</li>
-          <li>繰り越しで1日最大200往復</li>
-          <li>会話の記憶は直近20回の来店分と、好みや基本情報</li>
-          <li>チェキ券 月3枚</li>
-        </ul>
+        <dl>
+          <div><dt>会話</dt><dd>1日60往復<small>（月1,800往復）</small></dd></div>
+          <div><dt>1日最大</dt><dd>200往復<small>（繰り越し込み）</small></dd></div>
+          <div><dt>会話の記憶</dt><dd>直近20回の来店分と、好みや基本情報</dd></div>
+          <div><dt>チェキ券</dt><dd>月3枚</dd></div>
+        </dl>
       </div>
       <div class="plan">
         <p class="row"><b>推しプラン</b><i></i><span>月額 2,980円</span></p>
-        <ul>
-          <li>会話 1日120往復（月3,600往復）</li>
-          <li>繰り越しで1日最大250往復</li>
-          <li>会話の記憶は全期間</li>
-          <li>チェキ券 月10枚</li>
-          <li>長く通い続けると、ふたりがまだ話していない過去や、このお店にいる理由まで話してくれるようになります</li>
-        </ul>
+        <dl>
+          <div><dt>会話</dt><dd>1日120往復<small>（月3,600往復）</small></dd></div>
+          <div><dt>1日最大</dt><dd>250往復<small>（繰り越し込み）</small></dd></div>
+          <div><dt>会話の記憶</dt><dd>全期間</dd></div>
+          <div><dt>チェキ券</dt><dd>月10枚</dd></div>
+          <div><dt>特典</dt><dd>長く通い続けると、ふたりがまだ話していない過去や、このお店にいる理由まで話してくれるようになります</dd></div>
+        </dl>
       </div>
       <div class="plan">
-        <p class="row"><b>チェキ券</b><i></i><span>1枚 300円</span></p>
-        <ul>
-          <li>3枚 800円、10枚 2,500円</li>
-        </ul>
+        <p class="row"><b>チェキ券</b><i></i><span>都度購入</span></p>
+        <dl>
+          <div><dt>1枚</dt><dd>300円</dd></div>
+          <div><dt>3枚</dt><dd>800円</dd></div>
+          <div><dt>10枚</dt><dd>2,500円</dd></div>
+        </dl>
       </div>
-      <p class="fine">価格は税込です。1往復は、あなたの1回の発言とキャストの返事で、凪と朔をあわせた数です。月の数は30日で数えたものです。話さなかった日の分は翌日以降に繰り越され、その日の分と合わせて「1日最大」の数まで話せます。無料プランは、広告を見ると1回5往復・1日3回まで会話を延ばせます。</p>
-      <p class="fine">スタンダードと推しプランは1か月ごとに自動更新され、解約は iPhone の設定にある「サブスクリプション」から行えます。同じ内容はアプリ内のプラン画面でも確認できます。サービスの決まりは<a href="https://support.liminal-cafe.jp/terms.html">利用規約</a>をご覧ください。</p>
+      <ul class="fine">
+        <li>価格は税込です。</li>
+        <li>1往復は、あなたの1回の発言とキャストの返事です。凪と朔をあわせた数で数えます。</li>
+        <li>月の数は30日で数えたものです。</li>
+        <li>話さなかった日の分は翌日以降に繰り越され、その日の分と合わせて「1日最大」の数まで話せます。</li>
+        <li>スタンダードと推しプランは1か月ごとに自動更新されます。解約は iPhone の設定にある「サブスクリプション」から行えます。</li>
+        <li>同じ内容はアプリ内のプラン画面でも確認できます。サービスの決まりは<a href="https://support.liminal-cafe.jp/terms.html">利用規約</a>をご覧ください。</li>
+      </ul>
     </div>
   </section>
 
