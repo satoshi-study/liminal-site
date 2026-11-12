@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>Liminal</title>
+<style>
+  html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+  /* 立ち絵 948×1659 のうち、x 124〜824・y Y0〜Y0+960 だけを見せる（Y0 は凪 30・朔 55） */
+  canvas{position:absolute;left:-17.7143vw;top:-4.2857vw;width:135.4286vw;height:237vw;display:block;touch-action:pan-y;cursor:pointer}
+  .saku canvas{top:-7.8571vw}
+</style>
+</head>
+<body>
+<canvas id="c" width="948" height="1659"></canvas>
+<script>if (new URLSearchParams(location.search).get('c') === 'saku') document.body.className = 'saku';</script>
+<script type="module">
+
+const CAST = new URLSearchParams(location.search).get('c') === 'saku' ? 'saku' : 'nagi';
+const BASE = 'morph/' + CAST + '/';
+const RIG = await (await fetch(BASE + 'rig.json')).json();
+const MAN = await (await fetch(BASE + 'manifest.json')).json();
+const IMG = Object.fromEntries(Object.entries(MAN).map(([k, f]) => [k, BASE + f]));
+const RIGBIN = null, VOICE = null;
+const W = RIG.canvas[0], H = RIG.canvas[1];
+const PR = Object.assign({face_center: [475, 520], hair_tip: [1000, 1420], light: [28, 870],
+  hair_body: [820, 980], tilt_fade: [850, 700], turn_fade: [900, 780]}, RIG.params || {});   // *_fade・hair_body は [下の y, 上の y]
+const NAME = {nagi: '凪', saku: '朔'}[RIG.cast] || '';
+// キャラごとの動きの性格。凪＝静かで抑えた動き、朔＝思案気味でぼんやり・少し間がずれる
+const CHAR = {
+  nagi: {glanceP: 0.28, glanceHold: [0.8, 1.0], centerHold: [3.6, 4.4], glanceY: [-0.2, 0.4], headFollow: 0.55, tilt: 0.6,
+         headW: 6.5, headZ: 0.88, slowBlink: 0.06, halfBlink: 0.1, dblBlink: 0.1, blinkGap: [2.8, 3.6], nod: 0.55, hair: 0.6, hairOnBody: 0.15, lidRest: 0, saccadeBlink: 0.4,
+         think: [0, 0.55], thinkTilt: 0, thinkStill: 0.25, nodAns: 4.5, nodDelay: 0, nodsLong: 1, typingGlance: false, shyAway: 0.35},
+  saku: {glanceP: 0.6, glanceHold: [1.4, 2.4], centerHold: [1.8, 3.0], glanceY: [-0.7, 0.15], headFollow: 0.9, tilt: 0.9,
+         headW: 5.0, headZ: 0.62, slowBlink: 0.3, halfBlink: 0.12, dblBlink: 0.06, blinkGap: [2.6, 4.2], nod: 0.9, hair: 0.4, hairOnBody: 0.12, lidRest: 0.1, saccadeBlink: 0.65,
+         think: [0.5, -0.65], thinkTilt: 1.0, thinkStill: 0.8, nodAns: 5.5, nodDelay: 250, nodsLong: 2, typingGlance: true, shyAway: 0.7},
+}[RIG.cast] || {};
+const C = Object.assign({glanceP: 0.45, glanceHold: [1.0, 1.6], centerHold: [2.4, 3.6], glanceY: [-0.25, 0.35], headFollow: 0.8, tilt: 1,
+  headW: 7.5, headZ: 0.72, slowBlink: 0.1, halfBlink: 0.12, dblBlink: 0.16, blinkGap: [2.4, 3.4], nod: 1, hair: 1, hairOnBody: 1, lidRest: 0, saccadeBlink: 0.55,
+  think: [0, 0.4], thinkTilt: 0, thinkStill: 0.5, nodAns: 5, nodDelay: 0, nodsLong: 1, typingGlance: false, shyAway: 0.5}, CHAR);
+// 体の動きは「動いていると気づかない」程度に抑える（2026-11-10 ユーザー指定）
+const BODY = {breath: 1.1, chest: 0.0018, sway: 0.45, hairAmb: 0.35, deep: 1.45, light: 0.5};
+const qs = new URLSearchParams(location.search);
+if (qs.has('capture')) document.body.classList.add('capture');
+
+// ---- 時計（録画用に仮想時刻へ切り替えられる）と乱数 -----------------------
+let vt = null;
+const t0 = performance.now();
+const now = () => vt !== null ? vt : (performance.now() - t0) / 1000;
+let seed = 12345;
+const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const ss = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+
+// ---- 状態 ------------------------------------------------------------------
+const S = {
+  mode: qs.get('mode') === 'old' ? 'old' : 'new',
+  render: qs.get('render') === 'vertex' ? 'vertex' : 'pixel',   // pixel＝画素ごとの計算（最初の試作）／vertex＝頂点だけ（アプリと同じ描き方）
+  k: 1,
+  eyes: 0,                 // 0=開 1=半 2=閉
+  mouth: 0,                // 0=閉 1=半開き
+  face: {edge: 0, t: 0},   // regions.face.edges の番号と進み具合
+  exprBusy: false, blinking: false,
+  tiltAccent: 0, nodAccent: 0,
+  ptr: null,               // なぞっている位置（キャンバス座標）。離したら null
+  voiceStart: -1,          // 声を出し始めた時刻。出していなければ -1
+  scene: 'idle',           // 会話の場面：idle（待っている）/ typing（客が打っている）/ thinking（返事を考えている）/ answered（返事が出た）
+  motion: 1,               // ふだんの揺れの量（考えている間・重い話のときに下げる）
+  calm: 0,                 // 静かな動きを続ける残りターン数（重い話を受け止めた後）
+  lastEmo: '', abortExpr: false, forceAtt: null, glanceAt: 0, done: false,
+  cap: {scene: '', user: '', reply: ''},   // 画面に出す説明
+};
+const isNew = () => S.mode === 'new';
+const talking = t => !!VOICE && S.voiceStart >= 0 && t - S.voiceStart < VOICE.dur;
+
+// tween：値を時間をかけて動かす。await で順番に並べられる
+const tweens = [];
+function tween(obj, key, to, ms, ease) {
+  return new Promise(res => tweens.push({obj, key, from: obj[key], to, start: now(), dur: ms / 1000, ease: ease || (x => x), res}));
+}
+const sleep = ms => { const o = {v: 0}; return tween(o, 'v', 1, ms); };
+function runTweens(t) {
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const w = tweens[i]; const p = w.dur <= 0 ? 1 : Math.min(1, (t - w.start) / w.dur);
+    w.obj[w.key] = w.from + (w.to - w.from) * w.ease(p);
+    if (p >= 1) { tweens.splice(i, 1); w.res(); }
+  }
+}
+const easeIn = x => x * x, easeOut = x => 1 - (1 - x) * (1 - x), easeIO = x => x * x * (3 - 2 * x);
+
+// ばね：目標へ、少し行き過ぎてから落ち着く動きを作る
+class Spring {
+  constructor(w, z) { this.x = 0; this.v = 0; this.w = w; this.z = z; }
+  step(target, dt) {
+    const n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n;
+    for (let i = 0; i < n; i++) { this.v += (this.w * this.w * (target - this.x) - 2 * this.z * this.w * this.v) * h; this.x += this.v * h; }
+    return this.x;
+  }
+}
+const head = {x: new Spring(C.headW, C.headZ), y: new Spring(C.headW + 1, C.headZ), z: new Spring(C.headW - 1, C.headZ + 0.03)};   // 向き左右・上下・首の傾き
+const eye = {x: new Spring(42, 0.9), y: new Spring(42, 0.9)};                                 // 視線は速い
+const hair = {l: new Spring(5.2, 0.32), lt: new Spring(4.0, 0.28), r: new Spring(6.0, 0.34), rt: new Spring(4.6, 0.3), b: new Spring(11, 0.45)};
+const att = {x: 0, y: 0, next: 2.5};   // いま気を向けている先（-1..1）
+
+// ---- 瞬き ------------------------------------------------------------------
+async function blink(kind) {
+  if (S.blinking || S.exprBusy || S.face.t > 0 || S.face.edge !== 0) return;   // 表情中は閉じ目の素材が無い
+  S.blinking = true;
+  if (!isNew()) { S.eyes = 1; await sleep(100); S.eyes = 2; await sleep(100); S.eyes = 1; await sleep(100); S.eyes = 0; }
+  else if (kind === 'slow') { await tween(S, 'eyes', 2, 170, easeIO); await sleep(120); await tween(S, 'eyes', 0, 320, easeOut); }
+  else if (kind === 'half') { await tween(S, 'eyes', 1.15, 70, easeIn); await tween(S, 'eyes', 0, 150, easeOut); }
+  else { await tween(S, 'eyes', 2, 85, easeIn); await sleep(45); await tween(S, 'eyes', 0, 190, easeOut); }
+  S.blinking = false;
+}
+async function blinkLoop() {
+  for (;;) {
+    await sleep((talking(now()) ? 0.75 : 1) * (C.blinkGap[0] + rnd() * C.blinkGap[1]) * 1000);
+    const r = rnd();
+    if (!isNew()) await blink();
+    else if (r < C.dblBlink) { await blink(); await sleep(110); await blink(); }
+    else if (r < C.dblBlink + C.slowBlink) await blink('slow');
+    else await blink(r > 1 - C.halfBlink ? 'half' : undefined);
+  }
+}
+
+// ---- 表情 ------------------------------------------------------------------
+const faceEdge = b => RIG.regions.face.edges.findIndex(e => e.b === b);
+const EDGE = {smile: faceEdge('smile'), peak: faceEdge('smile_peak'), shy: faceEdge('shy'), pensive: faceEdge('pensive'), smirk: faceEdge('smirk')};
+// 感情ごとの身ぶり [首の傾き(度), うつむき]。troubled＝困っている、quiet＝重い話を受け止めている（顔の絵はどちらも pensive）
+const POSE = {smile: [1.3, -0.12], shy: [1.6, 0.5], troubled: [-1.2, 0.38], quiet: [0, 0.22], smirk: [-1.5, -0.15]};
+const FACE = {smile: 'smile', shy: 'shy', troubled: 'pensive', quiet: 'pensive', smirk: 'smirk'};
+const EMO_JA = {smile: '微笑み', shy: '照れ', troubled: 'しんみり（困っている）', quiet: 'しんみり（受け止めている）', smirk: 'ニヤリ'};
+async function express(kind, opt = {}) {
+  if (kind === 'pensive') kind = 'troubled';
+  if (S.exprBusy || EDGE[FACE[kind]] < 0) return;
+  S.exprBusy = true; S.abortExpr = false;
+  // 出しておく時間は返事を読む時間に合わせる。同じ感情が続いたら身ぶりを小さく、重い話の後は明るい身ぶりを控える
+  const hold = clamp(1.5 + (opt.chars || 40) * 0.06, 2.5, 6) * 1000;
+  const amp = (kind === S.lastEmo ? 0.6 : 1) * (S.calm > 0 && (kind === 'smile' || kind === 'smirk') ? 0.5 : 1);
+  S.lastEmo = kind; S.cap.scene = '感情：' + EMO_JA[kind]; showCap();
+  if (kind === 'quiet') { S.calm = 3; tween(S, 'motion', 0.3, 500); }      // この返事＋あと 2 ターン静かにする
+  if (isNew() && kind === 'smirk') { S.forceAtt = {x: 0.55, y: -0.1, until: now() + 0.22}; await sleep(220); }   // 入る直前に一瞬だけ視線を外す
+  while (S.blinking) await sleep(30);
+  S.eyes = 0;
+  const f = S.face;
+  const go = (to, ms) => isNew() ? tween(f, 't', to, ms, easeIO) : (f.t = to, Promise.resolve());
+  const wait = async ms => { const end = now() + ms / 1000; while (now() < end && !S.abortExpr) await sleep(50); };   // 客が打ち始めたら切り上げる
+  if (isNew()) { tween(S, 'tiltAccent', POSE[kind][0] * amp, 520, easeOut); tween(S, 'nodAccent', POSE[kind][1] * amp, 560, easeOut); }
+  if (kind === 'smile') {
+    f.edge = EDGE.smile; await go(1, 260);
+    f.edge = EDGE.peak; f.t = 0; await go(1, 220); await wait(900); await go(0, 320);
+    f.edge = EDGE.smile; f.t = 1; await wait(hold - 1700); await go(0, S.abortExpr ? 250 : 380);
+  } else {
+    f.edge = EDGE[FACE[kind]]; await go(1, 300); await wait(hold); await go(0, S.abortExpr ? 250 : 400);
+  }
+  f.edge = 0; f.t = 0;
+  if (isNew()) { tween(S, 'tiltAccent', 0, 800, easeIO); tween(S, 'nodAccent', 0, 800, easeIO); }
+  const cut = S.abortExpr;
+  S.exprBusy = false;
+  if (S.cap.scene.startsWith('感情')) { S.cap.scene = ''; showCap(); }
+  if (!isNew() || cut) return;
+  await sleep(160);
+  if (kind === 'shy') { S.forceAtt = {x: 0.6, y: 0.25, until: now() + C.shyAway}; await sleep(C.shyAway * 1000 + 120); blink(); }   // 戻るとき一度だけ視線を外す
+  else if (kind === 'troubled') { await blink(); await sleep(110); blink(); }
+  else if (kind === 'quiet') blink('slow');
+  else blink();
+}
+
+// ---- 会話の場面 ------------------------------------------------------------
+const SCENE_JA = {idle: '', typing: '場面：客が打っている', thinking: '場面：返事を考えている', answered: '場面：返事が出た'};
+function showCap() {}
+function setScene(sc, opt = {}) {
+  S.scene = sc;
+  if (!(sc === 'idle' && S.exprBusy)) S.cap.scene = SCENE_JA[sc];   // 表情が出ている間は「感情：〜」の字幕を消さない
+  showCap();
+  if (!isNew()) return;
+  if (sc === 'typing') { if (S.exprBusy) S.abortExpr = true; else tween(S, 'tiltAccent', 0, 400, easeIO); tween(S, 'motion', S.calm > 0 ? 0.6 : 1, 400); S.glanceAt = now() + 1.5; }
+  if (sc === 'thinking') { tween(S, 'motion', C.thinkStill, 600); tween(S, 'tiltAccent', C.thinkTilt, 700, easeIO); if (C.thinkStill < 0.5) blink('slow'); }
+  if (sc === 'answered') {
+    S.calm = Math.max(0, S.calm - 1);
+    tween(S, 'motion', S.calm > 0 ? 0.6 : 1, 500); tween(S, 'tiltAccent', 0, 450, easeIO);
+    const nods = (opt.chars || 30) >= 40 ? C.nodsLong : 1;     // 視線を客へ戻して、うなずく
+    (async () => { await sleep(C.nodDelay + 120); for (let i = 0; i < nods; i++) { head.y.v += C.nodAns * S.k; await sleep(430); } })();
+    (async () => { await sleep(1400); if (S.scene === 'answered') setScene('idle'); })();
+  }
+  if (sc === 'idle') { tween(S, 'motion', S.calm > 0 ? 0.6 : 1, 500); if (!S.exprBusy) tween(S, 'tiltAccent', 0, 500, easeIO); }
+}
+const CONV = {};
+let convBusy = false;
+async function converse(key) {
+  const c = CONV[key]; if (!c || convBusy) return; convBusy = true;
+  const emo = key === 'neutral' || key === 'after' ? null : key;
+  S.cap.user = '（入力中）' + c[0]; S.cap.reply = ''; setScene('typing'); await sleep(1900);
+  S.cap.user = c[0]; setScene('thinking'); await sleep(1600);
+  S.cap.reply = c[1]; setScene('answered', {chars: c[1].length}); await sleep(900);      // 感情は返事の約 1 秒後に届く
+  if (emo) await express(emo, {chars: c[1].length}); else await sleep(2200);
+  await sleep(700);
+  if (S.scene !== 'typing') setScene('idle');
+  S.cap.user = ''; S.cap.reply = ''; showCap();
+  convBusy = false;
+}
+
+// ---- 声と口パク ------------------------------------------------------------
+let audioEl = null, oldMouthHold = 0, lastEnv = 0, lastKick = -9;
+function speak() {
+  if (!VOICE || talking(now())) return;
+  S.voiceStart = now();
+  if (vt === null) { audioEl = audioEl || new Audio(VOICE.uri); audioEl.currentTime = 0; audioEl.play().catch(() => {}); }
+}
+function voiceEnv(t) {
+  if (!talking(t)) return 0;
+  const p = (t - S.voiceStart) * 60, i = Math.floor(p), a = VOICE.env[i] || 0, b = VOICE.env[i + 1] || 0;
+  return a + (b - a) * (p - i);
+}
+
+// ---- WebGL -----------------------------------------------------------------
+const cv = document.getElementById('c');
+const gl = cv.getContext('webgl', {premultipliedAlpha: true, alpha: true, antialias: false});
+function prog(vs, fs) {
+  const p = gl.createProgram();
+  for (const [ty, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(ty); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    gl.attachShader(p, s);
+  }
+  gl.linkProgram(p); p.u = {};
+  return p;
+}
+const U = (p, n) => p.u[n] || (p.u[n] = gl.getUniformLocation(p, n));
+const VS = `attribute vec2 pos; attribute vec2 uv; varying vec2 v; varying vec2 wp; uniform float flip;
+void main(){ v = uv; wp = pos; gl_Position = vec4(pos.x/${W}.0*2.0-1.0, (1.0-pos.y/${H}.0*2.0)*flip, 0.0, 1.0); }`;
+// 画像をそのまま描く。glow＝背景のランタン周りの光、warm＝キャラに当たる暖色。どちらも揺らぎの量を渡す
+const pTex = prog(VS, `precision highp float; varying vec2 v; varying vec2 wp; uniform sampler2D A; uniform float glow, warm; uniform vec2 light;
+void main(){
+  vec4 c = texture2D(A, v);
+  vec2 d = wp - light;
+  c.rgb += vec3(1.0, 0.62, 0.28) * glow * exp(-dot(d, d) / (2.0 * 150.0 * 150.0)) * c.a;
+  float f = clamp(1.0 - length(d) / 950.0, 0.0, 1.0);
+  c.rgb += c.rgb * vec3(0.9, 0.5, 0.2) * warm * f * f;
+  gl_FragColor = c;
+}`);
+// キーポーズ A と B を、それぞれ相手の形へ寄せてから混ぜる。A は「いまの顔」（視線つき）から取れる
+const pMorph = prog(VS, `precision highp float; varying vec2 v;
+uniform sampler2D A, B, FAB, FBA; uniform float t, maxd; uniform vec2 size, aOff, aScale;
+void main(){
+  vec2 fa = (texture2D(FAB, v).rg - 128.0/255.0) * 2.0 * maxd / size;
+  vec2 fb = (texture2D(FBA, v).rg - 128.0/255.0) * 2.0 * maxd / size;
+  vec4 a = texture2D(A, aOff + (v - t * fa) * aScale);
+  vec4 b = texture2D(B, v - (1.0 - t) * fb);
+  vec2 e = min(v, 1.0 - v) * size;
+  float f = smoothstep(0.0, 6.0, min(e.x, e.y));
+  gl_FragColor = mix(a, b, t) * f;
+}`);
+// 目：目の中だけを引っぱって視線を動かす。MASK は重み（瞳＝1、白目へなだらかに 0、まつ毛と肌＝0）
+const pEye = prog(VS, `precision highp float; varying vec2 v;
+uniform sampler2D A, MASK; uniform vec2 off;
+void main(){
+  float w = texture2D(MASK, v).a;
+  gl_FragColor = texture2D(A, v - off * w);
+}`);
+// 頂点方式：頂点ごとに「読む位置」と「濃さ」を持つだけの描き方（Flutter の drawVertices と同じことしかしない）
+const pV = prog(`attribute vec2 pos; attribute vec2 uv; attribute float al; varying vec2 v; varying vec2 wp; varying float va;
+void main(){ v = uv; wp = pos; va = al; gl_Position = vec4(pos.x/${W}.0*2.0-1.0, 1.0-pos.y/${H}.0*2.0, 0.0, 1.0); }`,
+`precision highp float; varying vec2 v; varying vec2 wp; varying float va; uniform sampler2D A; uniform float warm; uniform vec2 light;
+void main(){
+  vec4 c = texture2D(A, v);
+  float f = clamp(1.0 - length(wp - light) / 950.0, 0.0, 1.0);
+  c.rgb += c.rgb * vec3(0.9, 0.5, 0.2) * warm * f * f;
+  gl_FragColor = c * va;
+}`);
+function texParams() {
+  for (const p of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, p, gl.LINEAR);
+  for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE);
+}
+function tex(img, premul) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premul);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  texParams(); return t;
+}
+function target() {            // 描き込み先にできるキャンバス大のテクスチャ
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  texParams();
+  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  return {tex: t, fbo: f};
+}
+const T = {}, EL = {};
+const quad = gl.createBuffer(), meshPos = gl.createBuffer(), meshUv = gl.createBuffer(), meshIdx = gl.createBuffer();
+const quadData = new Float32Array(16);
+function drawQuad(p, x, y, w, h, flip) {
+  gl.useProgram(p);
+  quadData.set([x, y, 0, 0, x + w, y, 1, 0, x, y + h, 0, 1, x + w, y + h, 1, 1]);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.bufferData(gl.ARRAY_BUFFER, quadData, gl.DYNAMIC_DRAW);
+  const a = gl.getAttribLocation(p, 'pos'), b = gl.getAttribLocation(p, 'uv');
+  gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 16, 0);
+  gl.enableVertexAttribArray(b); gl.vertexAttribPointer(b, 2, gl.FLOAT, false, 16, 8);
+  gl.uniform1f(U(p, 'flip'), flip);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+function bind(p, name, unit, t) {
+  gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.uniform1i(U(p, name), unit);
+}
+function plain(t, flip, glow, warm) {
+  gl.useProgram(pTex); bind(pTex, 'A', 0, t);
+  gl.uniform1f(U(pTex, 'glow'), glow || 0); gl.uniform1f(U(pTex, 'warm'), warm || 0); gl.uniform2f(U(pTex, 'light'), PR.light[0], PR.light[1]);
+  drawQuad(pTex, 0, 0, W, H, flip);
+}
+let liveBase, faceOut;          // liveBase＝idle＋視線。faceOut＝その上に瞬き・口・表情を重ねたもの
+function drawEdge(rname, ei, t) {
+  const r = RIG.regions[rname], e = r.edges[ei], [x, y, w, h] = r.rect;
+  const live = r.nodes[0] === e.a;        // 先頭のキーポーズ（開いた目・閉じた口・素の顔）は「いまの顔」から取る
+  gl.useProgram(pMorph);
+  bind(pMorph, 'A', 0, live ? liveBase.tex : T[`${rname}_${e.a}`]); bind(pMorph, 'B', 1, T[`${rname}_${e.b}`]);
+  bind(pMorph, 'FAB', 2, T[`${rname}_${e.a}__${e.b}_fwd`]); bind(pMorph, 'FBA', 3, T[`${rname}_${e.a}__${e.b}_rev`]);
+  gl.uniform1f(U(pMorph, 't'), t); gl.uniform1f(U(pMorph, 'maxd'), RIG.flow_max);
+  gl.uniform2f(U(pMorph, 'size'), w, h);
+  if (live) { gl.uniform2f(U(pMorph, 'aOff'), x / W, y / H); gl.uniform2f(U(pMorph, 'aScale'), w / W, h / H); }
+  else { gl.uniform2f(U(pMorph, 'aOff'), 0, 0); gl.uniform2f(U(pMorph, 'aScale'), 1, 1); }
+  drawQuad(pMorph, x, y, w, h, -1);
+}
+function drawGaze(gx, gy) {
+  if (!RIG.gaze || RIG.gaze.mode !== 'warp') return;   // 古い形式（瞳を重ねる素材）の rig では視線を動かさない
+  for (const side of ['L', 'R']) {
+    const [x, y, w, h] = RIG.gaze[side].rect;
+    gl.useProgram(pEye);
+    bind(pEye, 'A', 0, T[`eye${side}_base`]); bind(pEye, 'MASK', 1, T[`eye${side}_mask`]);
+    gl.uniform2f(U(pEye, 'off'), gx * RIG.gaze.range[0] / w, gy * RIG.gaze.range[1] / h);
+    drawQuad(pEye, x, y, w, h, -1);
+  }
+}
+
+// 体の格子
+const NX = RIG.mesh.nx, NY = RIG.mesh.ny, NV = (NX + 1) * (NY + 1);
+const rest = new Float32Array(NV * 2), cur = new Float32Array(NV * 2);
+function initMesh() {
+  const uv = new Float32Array(NV * 2), idx = [];
+  for (let j = 0; j <= NY; j++) for (let i = 0; i <= NX; i++) {
+    const n = j * (NX + 1) + i;
+    rest[n * 2] = i / NX * W; rest[n * 2 + 1] = j / NY * H;
+    uv[n * 2] = i / NX; uv[n * 2 + 1] = j / NY;
+    if (i < NX && j < NY) idx.push(n, n + 1, n + NX + 1, n + 1, n + NX + 2, n + NX + 1);
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, meshUv); gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshIdx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+  meshIdx.count = idx.length;
+  liveBase = target(); faceOut = target();
+}
+
+// ---- 動きの演出 ------------------------------------------------------------
+const B = {phase: 0, deepLeft: 0, nextDeep: 14, amp: 1};   // 呼吸
+function breathShape(p) {                // 0..1。吸う 40%・吐く 60%
+  p = ((p % 1) + 1) % 1;
+  p = p < 0.4 ? p / 0.4 * 0.5 : 0.5 + (p - 0.4) / 0.6 * 0.5;
+  return 0.5 - 0.5 * Math.cos(2 * Math.PI * p);
+}
+let lastT = 0, gazeX = 0, gazeY = 0, flick = 0;
+function direct(t) {
+  const dt = clamp(t - lastT, 0, 0.05); lastT = t;
+  const k = S.k, kk = Math.min(1, k);
+  // 1) 気を向ける先：なぞっていればそこ、話している・表情中は正面、ふだんは時々よそを見る
+  if (S.ptr) { att.x = clamp((S.ptr[0] - PR.face_center[0]) / 330, -1, 1); att.y = clamp((S.ptr[1] - PR.face_center[1]) / 420, -1, 1); att.next = t + 1.4; }
+  else if (S.forceAtt && t < S.forceAtt.until) { att.x = S.forceAtt.x; att.y = S.forceAtt.y; att.next = t + 0.6; }
+  else if (S.exprBusy || talking(t)) { att.x = 0; att.y = 0; att.next = Math.max(att.next, t + 0.8); }
+  else if (isNew() && S.scene === 'thinking') { att.x = C.think[0]; att.y = C.think[1]; att.next = t + 1.2; }
+  else if (isNew() && S.scene === 'typing') {              // 客を見る。朔だけ、たまに一瞬視線が外れる
+    att.x = 0; att.y = 0; att.next = t + 1.5;
+    if (C.typingGlance && t > S.glanceAt) { S.forceAtt = {x: rnd() < 0.5 ? -0.45 : 0.45, y: -0.2, until: t + 0.3}; S.glanceAt = t + 2.2 + rnd() * 2; }
+  }
+  else if (isNew() && (S.scene === 'answered' || S.calm > 0)) { att.x = 0; att.y = 0; att.next = Math.max(att.next, t + 1.0); }   // 重い話の後はよそ見をしない
+  else if (t > att.next) {
+    const px = att.x;
+    if (rnd() > C.glanceP || Math.abs(px) > 0.2) { att.x = 0; att.y = 0; att.next = t + C.centerHold[0] + rnd() * C.centerHold[1]; }
+    else { att.x = (rnd() < 0.5 ? -1 : 1) * (0.35 + rnd() * 0.5); att.y = C.glanceY[0] + rnd() * (C.glanceY[1] - C.glanceY[0]); att.next = t + C.glanceHold[0] + rnd() * C.glanceHold[1]; }
+    if (isNew() && Math.abs(att.x - px) > 0.4 && rnd() < C.saccadeBlink) blink();      // 視線を大きく動かすとき、人はよく瞬きする
+  }
+  // 2) 顔：気を向けた先へ、遅れて少しだけ向く。目：先に動き、顔が追いついた分だけ戻る
+  const wander = (0.16 * Math.sin(t * 0.23 + 0.4) + 0.1 * Math.sin(t * 0.51 + 2.0)) * S.motion;
+  head.x.step(clamp((att.x * C.headFollow + wander) * kk, -1.1, 1.1), dt);
+  head.y.step(clamp((att.y * C.headFollow * 0.85 + S.nodAccent + 0.06 * S.motion * Math.sin(t * 0.31)) * kk, -1.1, 1.1), dt);
+  const tiltT = (((0.7 * Math.sin(t * 0.37) + 0.4 * Math.sin(t * 0.83 + 1.3)) * S.motion + att.x * 0.7) * C.tilt + S.tiltAccent) * k;
+  const z0 = head.z.x; head.z.step(tiltT, dt);
+  const tiltVel = dt > 0 ? (head.z.x - z0) / dt : 0;
+  const micro = 0.035 * Math.sin(t * 2.1) + 0.025 * Math.sin(t * 3.7 + 1);        // 目の細かな揺れ
+  eye.x.step(clamp((att.x - head.x.x * 0.55 * C.headFollow / 0.8) * 1.5 + micro, -1, 1), dt);
+  eye.y.step(clamp((att.y - head.y.x * 0.55) * 1.3, -1, 1), dt);
+  const open = 1 - ss(0, 0.9, S.eyes);         // 瞼が降りるにつれて瞳を正面へ戻す（閉じ目の絵と合わせるため）
+  // 下を見るときは瞳をあまり下げない：瞳の上（上瞼の影の中）に白い隙間が出るため
+  gazeX = eye.x.x * open; gazeY = eye.y.x * open * (eye.y.x > 0 ? 0.3 : 1);
+  // 3) 呼吸：ときどき深い息をつく
+  if (t > B.nextDeep && !talking(t)) { B.deepLeft = 1; B.nextDeep = t + 18 + rnd() * 14; }
+  const deep = B.deepLeft > 0;
+  const dp = dt / (deep ? 4.8 : 3.4);
+  B.phase += dp; if (deep) { B.deepLeft -= dp; if (B.deepLeft <= 0 && isNew()) blink('slow'); }
+  B.amp += ((deep ? BODY.deep : 1) - B.amp) * Math.min(1, dt * 2.5);
+  // 4) 声：音量で口を開け、音の立ち上がりで小さくうなずく
+  const env = voiceEnv(t);
+  if (isNew()) {
+    const target = talking(t) ? clamp((env - 0.06) / 0.5, 0, 1) ** 0.75 : 0;
+    S.mouth += (target - S.mouth) * (1 - Math.exp(-dt * (target > S.mouth ? 42 : 24)));
+    if (env > 0.42 && lastEnv <= 0.42 && t - lastKick > 0.38) { head.y.v += 1.1 * k * C.nod; head.z.v += (rnd() - 0.5) * 3 * k * C.nod; lastKick = t; }
+  } else if (talking(t)) {
+    if (t >= oldMouthHold) { S.mouth = env > 0.12 ? (S.mouth > 0.5 ? 0 : 1) : 0; oldMouthHold = t + 0.12; }
+  } else S.mouth = 0;
+  lastEnv = env;
+  // 5) 髪：頭の動きに遅れてついてきて、毛先はさらに遅れる
+  const drive = (-head.x.v * 7 - tiltVel * 1.5) * C.hair;
+  const amb = (ph) => (2.0 * Math.sin(t * 0.55 + ph) + 1.1 * Math.sin(t * 1.27 + ph * 2) + (breathShape(B.phase) - 0.5) * 1.6) * BODY.hairAmb;
+  hair.l.step(drive + amb(0), dt); hair.lt.step(hair.l.x * 1.5, dt);
+  hair.r.step(drive * 0.9 + amb(1.7), dt); hair.rt.step(hair.r.x * 1.5, dt);
+  hair.b.step(-head.x.v * 2.2 - tiltVel * 0.5, dt);
+  // 6) ランタンの光の揺らぎ
+  flick = isNew() ? (0.5 * Math.sin(t * 7.3) + 0.3 * Math.sin(t * 12.1 + 1) + 0.2 * Math.sin(t * 19.7 + 2)) * 0.028 * BODY.light + 0.03 * BODY.light * Math.sin(t * 1.3) : 0;
+}
+// 格子の値（頂点ごとの配列）を、任意の点でなめらかに読む
+const GX = RIG.mesh.nx, GY = RIG.mesh.ny;
+function samp(arr, x, y) {
+  const fx = clamp(x / W * GX, 0, GX - 1e-4), fy = clamp(y / H * GY, 0, GY - 1e-4);
+  const i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j, n = j * (GX + 1) + i;
+  return (arr[n] * (1 - u) + arr[n + 1] * u) * (1 - v) + (arr[n + GX + 1] * (1 - u) + arr[n + GX + 2] * u) * v;
+}
+// このコマの動きの量をまとめる。deformXY はこれを使って 1 点の置き場所を返す（全身の格子も、目・口・顔の格子も同じ計算）
+let D = null;
+const out2 = [0, 0];
+function prepDeform(t) {
+  const k = S.k, KF = RIG.keyforms || {};
+  const hx = head.x.x, hy = head.y.x;
+  const kx = hx < 0 ? KF.turn_l : KF.turn_r, ky = hy < 0 ? KF.nod_u : KF.nod_d;
+  // キーポーズごとに動きの大きさが違うので、左右は 24px、上下は 18px 相当にそろえる（伸ばしすぎ・縮めすぎは避ける）
+  const gain = (f, want) => f && f.max ? clamp(want / f.max, 0.5, 1.5) : 1;
+  D = {k, kx, ky, ax: Math.abs(hx) * gain(kx, 24), ay: Math.abs(hy) * gain(ky, 18),
+    b1: breathShape(B.phase) * B.amp, b2: breathShape(B.phase - 0.08) * B.amp,
+    sway: BODY.sway * k * Math.sin(t * 0.21 + 0.6), rad: head.z.x * Math.PI / 180,
+    hl: hair.l.x, hlt: hair.lt.x - hair.l.x, hr: hair.r.x, hrt: hair.rt.x - hair.r.x, hb: hair.b.x,
+    old: !isNew(), s: 1 + 0.004 * (1 + Math.sin(t / 2.5 * 2 * Math.PI))};
+}
+function deformXY(x0, y0) {
+  if (D.old) { out2[0] = x0; out2[1] = H - (H - y0) * D.s; return out2; }     // 現行：全身を下端基準で 0.8% 伸縮するだけ
+  const wt = RIG.weights, k = D.k, [px, py] = RIG.anchors.neck_pivot, cx = RIG.anchors.chest_center[0];
+  let x = x0, y = y0;
+  // 顔の向き：AI が描いたキーポーズから取り出した頂点のずれ（キーフォーム）を、向きの量だけ足す。肩から下へは伝えない
+  const hm = ss(PR.turn_fade[0], PR.turn_fade[1], y0);
+  if (hm > 0) {
+    if (D.kx) { x += samp(D.kx.dx, x0, y0) * D.ax * hm; y += samp(D.kx.dy, x0, y0) * D.ax * hm; }
+    if (D.ky) { x += samp(D.ky.dx, x0, y0) * D.ay * hm; y += samp(D.ky.dy, x0, y0) * D.ay * hm; }
+  }
+  const up = ss(1520, 1050, y0), hd = ss(860, 690, y0);
+  y -= BODY.breath * k * up * ((1 - hd) * D.b1 + hd * 0.9 * D.b2);
+  const chest = Math.exp(-((y0 - 1100) ** 2) / (2 * 220 * 220));
+  x += (x0 - cx) * BODY.chest * k * D.b1 * chest;
+  x += D.sway * ss(1659, 500, y0);
+  const a = D.rad * ss(PR.tilt_fade[0], PR.tilt_fade[1], y0), c = Math.cos(a), sn = Math.sin(a), rx = x - px, ry = y - py;
+  x = px + rx * c - ry * sn; y = py + rx * sn + ry * c;
+  const tip = ss(PR.hair_tip[0], PR.hair_tip[1], y0);
+  // 肩より下（体の上）にかかる髪は hairOnBody の分だけに抑える：1 枚絵なので、髪を動かすと下の服も動いて見える
+  const onBody = 1 - (1 - C.hairOnBody) * ss(PR.hair_body[0], PR.hair_body[1], y0);
+  x += ((D.hl + D.hlt * tip) * samp(wt.hair_l, x0, y0) + (D.hr + D.hrt * tip) * samp(wt.hair_r, x0, y0)) * 2.0 * k * onBody;
+  if (wt.bangs) x += D.hb * samp(wt.bangs, x0, y0) * 1.2 * k;
+  out2[0] = x; out2[1] = y; return out2;
+}
+function deform(t) {
+  prepDeform(t);
+  for (let n = 0; n < NV; n++) { const o = deformXY(rest[n * 2], rest[n * 2 + 1]); cur[n * 2] = o[0]; cur[n * 2 + 1] = o[1]; }
+}
+
+// ---- 頂点方式の部品 --------------------------------------------------------
+// 領域（目・口・顔）ごとの細かい格子。頂点ごとに、各辺の「読む位置のずれ」と視線の重みを持つ
+const LAYER = {};
+function pixels(name) {
+  const im = EL[name], c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+  const g = c.getContext('2d'); g.drawImage(im, 0, 0);
+  return {w: c.width, h: c.height, d: g.getImageData(0, 0, c.width, c.height).data};
+}
+function pix(pm, u, v, ch) {       // 0..1 の位置を、4 点のなめらかな補間で読む
+  const fx = clamp(u * pm.w - 0.5, 0, pm.w - 1.001), fy = clamp(v * pm.h - 0.5, 0, pm.h - 1.001);
+  const i = Math.floor(fx), j = Math.floor(fy), a = fx - i, b = fy - j, at = (x, y) => pm.d[(y * pm.w + x) * 4 + ch];
+  return (at(i, j) * (1 - a) + at(i + 1, j) * a) * (1 - b) + (at(i, j + 1) * (1 - a) + at(i + 1, j + 1) * a) * b;
+}
+// rig.bin を読む（アプリの読み込みと同じ手順）：'LKM1'＋ヘッダ長＋ヘッダ(JSON)＋数値の並び
+function readRigBin(b64) {
+  const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0)), dv = new DataView(raw.buffer);
+  if (String.fromCharCode(...raw.slice(0, 4)) !== 'LKM1') throw new Error('rig.bin の形式が違う');
+  const n = dv.getUint32(4, true), head = JSON.parse(new TextDecoder().decode(raw.slice(8, 8 + n))), base = 8 + n;
+  const get = ref => {
+    const o = new Float32Array(ref.n);
+    for (let i = 0; i < ref.n; i++) o[i] = (ref.type === 'i16' ? dv.getInt16(base + ref.off + i * 2, true) : raw[base + ref.off + i]) * ref.scale;
+    return o;
+  };
+  return {head, get};
+}
+const BIN = RIGBIN ? readRigBin(RIGBIN) : null;
+function initLayers() {
+  const step = {eyes: 6, mouth: 6, face: 8};
+  for (const [rname, r] of Object.entries(RIG.regions)) {
+    const hb = BIN && BIN.head.regions[rname];
+    const [rx, ry, rw, rh] = r.rect, nx = hb ? hb.nx : Math.ceil(rw / step[rname]), ny = hb ? hb.ny : Math.ceil(rh / step[rname]), nv = (nx + 1) * (ny + 1);
+    const L = {rect: r.rect, nv, rest: new Float32Array(nv * 2), pos: new Float32Array(nv * 2), uv: new Float32Array(nv * 2), al: new Float32Array(nv),
+      flow: [], gw: new Float32Array(nv), edge: new Float32Array(nv), idx: gl.createBuffer(), bp: gl.createBuffer(), bu: gl.createBuffer(), ba: gl.createBuffer()};
+    const idx = [];
+    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
+      const n = j * (nx + 1) + i; L.rest[n * 2] = rx + i / nx * rw; L.rest[n * 2 + 1] = ry + j / ny * rh;
+      L.edge[n] = Math.min(i, nx - i, j, ny - j) >= 1 ? 1 : 0;     // 外周の頂点は濃さ 0：全身の格子との継ぎ目を 1 マスぶんぼかす
+      if (i < nx && j < ny) idx.push(n, n + 1, n + nx + 1, n + 1, n + nx + 2, n + nx + 1);
+    }
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, L.idx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW); L.count = idx.length;
+    if (hb) {                        // rig.bin があれば、頂点ごとの値をそのまま使う
+      for (const e of hb.edges) L.flow.push({fw: BIN.get(e.fw), rv: BIN.get(e.rv)});
+      if (hb.gaze_w) L.gw = BIN.get(hb.gaze_w);
+      LAYER[rname] = L; continue;
+    }
+    for (const e of r.edges) {       // フロー PNG（R=dx・G=dy・128 が 0）を頂点の位置で読む
+      const f = pixels(`${rname}_${e.a}__${e.b}_fwd`), b = pixels(`${rname}_${e.a}__${e.b}_rev`), fw = new Float32Array(nv * 2), rv = new Float32Array(nv * 2);
+      for (let n = 0; n < nv; n++) {
+        const u = (L.rest[n * 2] - rx) / rw, v = (L.rest[n * 2 + 1] - ry) / rh, sc = 2 * RIG.flow_max / 255;
+        fw[n * 2] = (pix(f, u, v, 0) - 128) * sc; fw[n * 2 + 1] = (pix(f, u, v, 1) - 128) * sc;
+        rv[n * 2] = (pix(b, u, v, 0) - 128) * sc; rv[n * 2 + 1] = (pix(b, u, v, 1) - 128) * sc;
+      }
+      L.flow.push({fw, rv});
+    }
+    if (rname === 'eyes' && RIG.gaze && RIG.gaze.mode === 'warp') for (const side of ['L', 'R']) {   // 視線の重み
+      const m = pixels(`eye${side}_mask`), [gx, gy, gw, gh] = RIG.gaze[side].rect;
+      for (let n = 0; n < nv; n++) {
+        const u = (L.rest[n * 2] - gx) / gw, v = (L.rest[n * 2 + 1] - gy) / gh;
+        if (u > 0 && u < 1 && v > 0 && v < 1) L.gw[n] = Math.max(L.gw[n], pix(m, u, v, 3) / 255);
+      }
+    }
+    LAYER[rname] = L;
+  }
+}
+// 1 枚重ねる：tex を、頂点ごとに (ox, oy) だけ読む位置をずらして、濃さ alpha で描く。full＝tex がキャンバス全体の絵か、領域の絵か
+function drawLayer(L, tex, full, alpha, off) {
+  const [rx, ry, rw, rh] = L.rect;
+  for (let n = 0; n < L.nv; n++) {
+    const x0 = L.rest[n * 2], y0 = L.rest[n * 2 + 1], o = deformXY(x0, y0);
+    L.pos[n * 2] = o[0]; L.pos[n * 2 + 1] = o[1];
+    off(n); const sx = x0 - out2[0], sy = y0 - out2[1];      // off(n) は out2 に「読む位置のずれ」を入れる
+    L.uv[n * 2] = full ? sx / W : (sx - rx) / rw; L.uv[n * 2 + 1] = full ? sy / H : (sy - ry) / rh;
+    L.al[n] = alpha * L.edge[n];
+  }
+  gl.useProgram(pV); bind(pV, 'A', 0, tex);
+  gl.uniform1f(U(pV, 'warm'), flick * 1.5); gl.uniform2f(U(pV, 'light'), PR.light[0], PR.light[1]);
+  for (const [buf, data, name, size] of [[L.bp, L.pos, 'pos', 2], [L.bu, L.uv, 'uv', 2], [L.ba, L.al, 'al', 1]]) {
+    const loc = gl.getAttribLocation(pV, name);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
+  }
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, L.idx); gl.drawElements(gl.TRIANGLES, L.count, gl.UNSIGNED_SHORT, 0);
+  gl.disableVertexAttribArray(gl.getAttribLocation(pV, 'al'));
+}
+// 1 辺のモーフ：A を t×ずれ だけ読み替えて描き、B を (1−t)×ずれ だけ読み替えて濃さ t で重ねる
+function morphLayer(rname, ei, t, gx, gy) {
+  const L = LAYER[rname], r = RIG.regions[rname], e = r.edges[ei], fl = L.flow[ei], live = r.nodes[0] === e.a;
+  const gX = gx * (RIG.gaze ? RIG.gaze.range[0] : 0), gY = gy * (RIG.gaze ? RIG.gaze.range[1] : 0);
+  drawLayer(L, live ? T.idle : T[`${rname}_${e.a}`], live, 1, n => {
+    out2[0] = t * fl.fw[n * 2] + (live ? gX * L.gw[n] : 0); out2[1] = t * fl.fw[n * 2 + 1] + (live ? gY * L.gw[n] : 0);
+  });
+  if (t > 0.001) drawLayer(L, T[`${rname}_${e.b}`], false, t, n => { out2[0] = (1 - t) * fl.rv[n * 2]; out2[1] = (1 - t) * fl.rv[n * 2 + 1]; });
+}
+
+// ---- 1 コマ描く ------------------------------------------------------------
+function frame() {
+  const t = now();
+  runTweens(t);
+  direct(t);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.clearColor(0, 0, 0, 0);
+  const f = S.face, vertex = S.render === 'vertex' && isNew();
+  const lid = isNew() ? Math.max(S.eyes, S.calm > 0 ? 0 : C.lidRest) : S.eyes;      // 朔はふだんから瞼が少しだけ重い（重い話の後は外す）
+  if (!vertex) {
+    // 1) いまの顔：idle に視線つきの目を重ねる
+    gl.bindFramebuffer(gl.FRAMEBUFFER, liveBase.fbo); gl.viewport(0, 0, W, H); gl.clear(gl.COLOR_BUFFER_BIT);
+    plain(T.idle, -1);
+    if (isNew()) drawGaze(gazeX, gazeY);
+    // 2) その上に表情・瞬き・口をモーフで重ねる
+    gl.bindFramebuffer(gl.FRAMEBUFFER, faceOut.fbo); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.BLEND); plain(liveBase.tex, -1); gl.enable(gl.BLEND);
+    if (f.edge !== 0 || f.t > 0.001) drawEdge('face', f.edge, f.t);
+    else {
+      if (lid > 0.001) lid <= 1 ? drawEdge('eyes', 0, lid) : drawEdge('eyes', 1, lid - 1);
+      if (S.mouth > 0.01) drawEdge('mouth', 0, Math.min(1, S.mouth));
+    }
+  }
+  // 3) 背景 → 体の格子で歪めて画面へ（頂点方式では、画面外の合成をせず idle をそのまま貼る）
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  deform(t);
+  gl.useProgram(pTex); bind(pTex, 'A', 0, vertex ? T.idle : faceOut.tex);
+  gl.uniform1f(U(pTex, 'flip'), 1); gl.uniform1f(U(pTex, 'glow'), 0); gl.uniform1f(U(pTex, 'warm'), flick * 1.5);
+  const a = gl.getAttribLocation(pTex, 'pos'), b = gl.getAttribLocation(pTex, 'uv');
+  gl.bindBuffer(gl.ARRAY_BUFFER, meshPos); gl.bufferData(gl.ARRAY_BUFFER, cur, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, meshUv);
+  gl.enableVertexAttribArray(b); gl.vertexAttribPointer(b, 2, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshIdx);
+  gl.drawElements(gl.TRIANGLES, meshIdx.count, gl.UNSIGNED_SHORT, 0);
+  if (vertex) {
+    // 4) 頂点方式：目・口・顔の細かい格子を上から重ねる
+    if (f.edge !== 0 || f.t > 0.001) morphLayer('face', f.edge, f.t, 0, 0);
+    else {
+      if (lid > 1) morphLayer('eyes', 1, lid - 1, 0, 0);
+      else if (lid > 0.001 || Math.abs(gazeX) > 0.002 || Math.abs(gazeY) > 0.002) morphLayer('eyes', 0, lid, gazeX, gazeY);
+      if (S.mouth > 0.01) morphLayer('mouth', 0, Math.min(1, S.mouth), 0, 0);
+    }
+  }
+}
+
+// ---- 起動 ------------------------------------------------------------------
+async function load() {
+  await Promise.all(Object.entries(IMG).map(([name, uri]) => new Promise((res, rej) => {
+    const im = new Image(); im.onload = () => { T[name] = tex(im, !/_fwd$|_rev$/.test(name)); EL[name] = im; res(); };
+    im.onerror = rej; im.src = uri;
+  })));
+  initMesh();
+  // なぞると目と顔が追う。軽く触れたら表情を順に出す
+  const setPtr = e => { const r = cv.getBoundingClientRect(); S.ptr = [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
+  const FACES = ['smile', 'shy'].concat(EDGE.smirk >= 0 ? ['smirk'] : []);
+  let down = null, turn = 0;
+  cv.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY, performance.now()]; setPtr(e); });
+  cv.addEventListener('pointermove', e => { if (S.ptr || e.pointerType === 'mouse') setPtr(e); });
+  cv.addEventListener('pointerup', e => {
+    if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 12 && performance.now() - down[2] < 500 && !S.exprBusy) express(FACES[turn++ % FACES.length]);
+    down = null;
+  });
+  for (const n of ['pointerup', 'pointercancel', 'pointerleave']) cv.addEventListener(n, e => { if (n !== 'pointerup' || e.pointerType !== 'mouse') S.ptr = null; });
+  blinkLoop();
+  // 画面に出ている間だけ描く
+  let visible = false, raf = 0, greeted = false;
+  const loop = () => { raf = 0; if (!visible || document.hidden) return; frame(); raf = requestAnimationFrame(loop); };
+  const kick = () => { if (!raf) raf = requestAnimationFrame(loop); };
+  new IntersectionObserver(es => {
+    const e = es[es.length - 1]; visible = e.isIntersecting; if (visible) kick();
+    if (!greeted && e.intersectionRatio >= 0.6) { greeted = true; setTimeout(() => express('smile'), 900); }
+  }, {threshold: [0, 0.05, 0.6]}).observe(cv);
+  document.addEventListener('visibilitychange', kick);
+  frame();
+  parent.postMessage({liminalCast: CAST, ready: true}, '*');
+}
+load().catch(() => parent.postMessage({liminalCast: CAST, ready: false}, '*'));
+
+</script>
+</body>
+</html>
