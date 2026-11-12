@@ -163,12 +163,20 @@ a.status:hover { background: rgba(255, 201, 122, .12); }
 .cue { display: none; }
 .js .cue {
   display: block;
-  margin-top: 1.4rem;
-  color: var(--paper-dim);
-  font-size: .78rem;
+  margin: .9rem auto 0;
+  padding: .7rem 1.6rem 0;
+  border: 0;
+  background: none;
+  color: var(--paper);
+  font: inherit;
+  font-size: .95rem;
   letter-spacing: .3em;
   line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
+.js .cue:focus-visible { outline: 2px solid var(--lamp-bright); outline-offset: 4px; border-radius: 4px; }
+.js .door-frame { cursor: pointer; }
 .js .cue::after {
   content: "";
   display: block;
@@ -502,14 +510,14 @@ footer p { margin-top: .9rem; }
       <p class="place">時の狭間にある cafe &amp; bar</p>
       <p class="what">AIキャストと会話するコンカフェ</p>
       <span class="status">iPhone アプリとして開店準備中</span>
-      <p class="cue" aria-hidden="true">扉をひらく</p>
+      <button class="cue" type="button">扉をひらく</button>
     </div>
   </div>
 </header>
 
 <main>
 
-  <section class="room">
+  <section class="room" id="room">
     <div class="verse">
       <p class="big">ここはどこにもない場所。</p>
       <p>急がなくていい。<br>気を遣わなくていい。<br>あなただけの席があります。</p>
@@ -687,6 +695,29 @@ footer p { margin-top: .9rem; }
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onScroll);
   update();
+
+  // 「扉をひらく」か扉そのものを押すと、扉が開く場面を通って店内まで進む
+  var room = document.getElementById('room');
+  var run = 0;
+  function stop() { run = 0; }
+  function enter() {
+    if (!room || run) return;
+    var from = window.pageYOffset, to = room.getBoundingClientRect().top + from;
+    if (to - from < 4) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { window.scrollTo(0, to); return; }
+    var start = performance.now(), dur = 3200, id = run = start;
+    (function step(now) {
+      if (run !== id) return;
+      var k = Math.min(1, (now - start) / dur);
+      var e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      window.scrollTo(0, from + (to - from) * e);
+      if (k < 1) requestAnimationFrame(step); else run = 0;
+    })(start);
+  }
+  ['wheel', 'touchmove', 'keydown'].forEach(function (n) { window.addEventListener(n, stop, { passive: true }); });
+  var cue = scene.querySelector('.cue'), door = scene.querySelector('.door-frame');
+  if (cue) cue.addEventListener('click', enter);
+  if (door) door.addEventListener('click', function () { if (!scene.classList.contains('opened')) enter(); });
 })();
 
 // キャストの瞬きと微笑み（アプリと同じパーツ・同じ間隔）
