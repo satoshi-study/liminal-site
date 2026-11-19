@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>今夜の一杯｜Liminal</title>
+<meta name="description" content="カウンターに座ると、AIキャストの凪か朔が五つだけ問いかけてくる。答えると、今夜の一杯が一言つきで出てくる、3分ほどの遊び。">
+<meta name="theme-color" content="#050506">
+<meta name="color-scheme" content="dark">
+<link rel="canonical" href="https://liminal-cafe.jp/ippai/">
+<link rel="apple-touch-icon" href="../img/icon-180.png">
+<link rel="icon" href="../img/icon-180.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Liminal">
+<meta property="og:title" content="今夜の一杯｜Liminal">
+<meta property="og:description" content="カウンターで、五つだけ答える。凪か朔が、今夜の一杯を選んでくれる。">
+<meta property="og:url" content="https://liminal-cafe.jp/ippai/">
+<meta property="og:image" content="https://liminal-cafe.jp/img/ogp.jpg">
+<meta property="og:image:alt" content="凪と朔、Liminal のロゴ">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" as="image" href="../img/door0.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --night: #1A1B3A;
+  --night-deep: #0F0F24;
+  --paper: #F5F2EA;
+  --paper-dim: #BDB7C6;
+  --lamp: #FFC97A;
+  --lamp-bright: #FFD78A;
+  --lamp-deep: #C97A2B;
+  --nagi: #B9A6E8;
+  --saku: #F0A35E;
+  --mincho: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  --gothic: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+  --tone: var(--lamp);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; height: 100%; }
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 40%, #16162e 0%, #050506 70%) #050506;
+  color: var(--paper);
+  font-family: var(--mincho);
+  font-size: 1rem;
+  line-height: 1.9;
+  letter-spacing: .04em;
+  overflow-wrap: anywhere;
+}
+img { display: block; max-width: 100%; height: auto; }
+a { color: inherit; }
+h1, h2, p, figure, ol { margin: 0; padding: 0; }
+ol { list-style: none; }
+button { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--lamp-bright); outline-offset: 3px; }
+
+.app {
+  position: relative;
+  max-width: 480px;
+  height: 100vh;
+  height: 100svh;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--night);
+  box-shadow: 0 0 80px rgba(0, 0, 0, .6);
+}
+.screen {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .7s ease, visibility 0s linear .7s;
+}
+.screen.on { opacity: 1; visibility: visible; transition: opacity .7s ease, visibility 0s; }
+
+/* ── 音を切る ── */
+.mute {
+  position: absolute;
+  z-index: 50;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 10px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(245, 242, 234, .28);
+  border-radius: 50%;
+  background: rgba(10, 10, 25, .55);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.mute svg { width: 20px; height: 20px; }
+.mute .off { display: none; }
+.mute[aria-pressed="true"] .on { display: none; }
+.mute[aria-pressed="true"] .off { display: inline; }
+
+/* ── 足元の注意書き・開店前の一行 ── */
+.note {
+  font-family: var(--gothic);
+  font-size: .72rem;
+  line-height: 1.75;
+  letter-spacing: .02em;
+  color: var(--paper-dim);
+}
+.status {
+  display: inline-block;
+  padding: .3rem 1.2rem;
+  border: 1px solid rgba(255, 201, 122, .55);
+  border-radius: 999px;
+  color: var(--lamp-bright);
+  font-size: .85rem;
+  line-height: 1.7;
+  text-decoration: none;
+}
+a.status:hover { background: rgba(255, 201, 122, .12); }
+
+/* ── 扉 ── */
+.door { background: #050506; overflow: hidden; }
+.door-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 100svh * 941 / 1672);
+  aspect-ratio: 941 / 1672;
+  container-type: size;
+  transform: translate(-50%, -50%);
+  transform-origin: 52% 56%;
+  transition: transform 1.3s cubic-bezier(.55, 0, .7, .4);
+}
+.door-frame > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.door-frame > .f1, .door-frame > .f2, .door-frame > .f3 { opacity: 0; transition: opacity .55s ease; }
+.door.s1 .f1, .door.s2 .f2, .door.s3 .f3 { opacity: 1; }
+.door.zoom .door-frame { transform: translate(-50%, -50%) scale(2.6); }
+.lantern {
+  position: absolute;
+  left: 17.8%;
+  top: 31.5%;
+  width: 46cqw;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(255, 201, 122, .34) 0%, rgba(255, 201, 122, .12) 32%, rgba(255, 201, 122, 0) 68%);
+  mix-blend-mode: screen;
+  animation: flicker 7s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes flicker {
+  0%, 100% { opacity: .55; }
+  18% { opacity: .9; }
+  26% { opacity: .62; }
+  41% { opacity: 1; }
+  57% { opacity: .7; }
+  63% { opacity: .95; }
+  82% { opacity: .6; }
+}
+.door-ui { transition: opacity .5s ease; }
+.door.s1 .door-ui, .door.s1 .door-foot { opacity: 0; }
+.door-logo { position: absolute; top: 4.5cqh; left: 50%; width: 46cqw; transform: translateX(-50%); }
+.door-logo img { width: 100%; }
+.door-title {
+  position: absolute;
+  left: 52.6%;
+  top: 49%;
+  transform: translate(-50%, -50%);
+  writing-mode: vertical-rl;
+  font-size: 4.2cqh;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: .32em;
+  white-space: nowrap;
+  text-shadow: 0 0 1.2em rgba(0, 0, 0, .95), 0 0 .3em rgba(0, 0, 0, .85);
+}
+.veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, #3a2a44 0%, var(--night) 42%);
+  opacity: 0;
+  transition: opacity 1s ease .35s;
+  pointer-events: none;
+}
+.door.zoom .veil { opacity: 1; }
+.door-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14svh 20px calc(18px + env(safe-area-inset-bottom));
+  text-align: center;
+  background: linear-gradient(to bottom, rgba(5, 5, 6, 0) 0%, rgba(5, 5, 6, .82) 45%, #050506 100%);
+  transition: opacity .5s ease;
+}
+.lead { font-size: 1.02rem; letter-spacing: .12em; text-shadow: 0 0 1em rgba(0, 0, 0, .9); }
+.cue {
+  display: block;
+  min-width: 13rem;
+  min-height: 52px;
+  margin: 1rem auto 0;
+  padding: .55rem 1.8rem;
+  border: 1px solid rgba(255, 201, 122, .7);
+  border-radius: 999px;
+  background: rgba(255, 201, 122, .1);
+  color: var(--lamp-bright);
+  font-size: 1.05rem;
+  letter-spacing: .3em;
+  line-height: 1.6;
+  cursor: pointer;
+  box-shadow: 0 0 28px -6px rgba(255, 201, 122, .45);
+}
+.cue:disabled { opacity: .4; cursor: default; }
+.door-foot .status { margin-top: 1rem; }
+.door-foot .note { margin: 1rem auto 0; max-width: 22rem; }
+/* data.json が読めなかったとき：中身の無いボタンと枠を隠し、案内の一行だけ出す */
+.loadfail { margin: 1rem auto 0; max-width: 22rem; font-size: .95rem; line-height: 1.8; letter-spacing: .06em; color: var(--lamp-bright); text-wrap: balance; line-break: strict; }
+@supports (word-break: auto-phrase) { .loadfail { word-break: auto-phrase; } }
+.door.failed .cue, .door.failed .status { display: none; }
+
+/* ── 席を選ぶ ── */
+.pick {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 72px 20px calc(20px + env(safe-area-inset-bottom));
+  text-align: center;
+  background:
+    linear-gradient(to bottom, var(--night) 0%, rgba(26, 27, 58, .55) 30%, rgba(26, 27, 58, .7) 70%, var(--night) 100%),
+    url(../img/bar.jpg) center 30% / cover no-repeat;
+}
+.pick h2 {
+  font-size: 1.3rem;
+  font-weight: 500;
+  line-height: 1.8;
+  letter-spacing: .14em;
+  text-shadow: 0 0 1.2em rgba(10, 10, 25, .95);
+}
+.pick h2::after {
+  content: "";
+  display: block;
+  width: 8rem;
+  height: 2px;
+  margin: .8rem auto 0;
+  background: linear-gradient(to right, rgba(255, 201, 122, 0), var(--lamp) 50%, rgba(255, 201, 122, 0));
+}
+.seats { display: flex; justify-content: center; gap: 1.2rem; margin-top: 2.4rem; }
+.seat-btn {
+  flex: 0 1 9.5rem;
+  padding: 1.1rem .6rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
+  border-radius: 14px;
+  background: rgba(10, 10, 25, .6);
+  cursor: pointer;
+}
+.seat-btn.nagi { --tone: var(--nagi); }
+.seat-btn.saku { --tone: var(--saku); }
+.seat-btn img {
+  width: 6.4rem;
+  height: 6.4rem;
+  margin: 0 auto .7rem;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 50% 30%;
+  box-shadow: 0 0 0 2px var(--tone), 0 0 26px -4px color-mix(in srgb, var(--tone) 70%, transparent);
+}
+.seat-btn span { display: block; font-size: 1.5rem; line-height: 1.4; letter-spacing: .1em; color: var(--tone); }
+.seat-btn:active { background: rgba(255, 201, 122, .1); }
+.pick .note { margin: 2.6rem auto 0; max-width: 22rem; }
+
+/* ── カウンター ── */
+.counter { display: flex; flex-direction: column; background: var(--night); }
+.counter.nagi { --tone: var(--nagi); }
+.counter.saku { --tone: var(--saku); }
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  /* 横向き・文字が大きいとき、立ち絵が潰れきらないように（その分は会話の段がスクロールする） */
+  min-height: 120px;
+  overflow: hidden;
+  container-type: size;
+  background-position: center 30%;
+  background-size: cover;
+}
+.counter.nagi .stage { background-image: linear-gradient(rgba(15, 15, 36, .4), rgba(15, 15, 36, .4)), url(../img/nagi_bg.jpg); }
+.counter.saku .stage { background-image: linear-gradient(rgba(15, 15, 36, .4), rgba(15, 15, 36, .4)), url(../img/saku_bg.jpg); }
+.stage::before, .stage::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.stage::before { top: 0; height: 4.5rem; background: linear-gradient(to bottom, rgba(26, 27, 58, .85), rgba(26, 27, 58, 0)); }
+.stage::after { bottom: 0; height: 5rem; background: linear-gradient(to top, var(--night), rgba(26, 27, 58, 0)); }
+.who {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: min(100cqw, 100cqh * 700 / 960);
+  aspect-ratio: 700 / 960;
+  transform: translateX(-50%);
+}
+.who:not(.here) { left: -9999px; transform: none; }
+.who::before {
+  content: "";
+  position: absolute;
+  inset: 8% -6% 0;
+  background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--tone) 40%, transparent) 0%, transparent 68%);
+  filter: blur(8px);
+}
+.who[data-cast="nagi"] { --tone: var(--nagi); }
+.who[data-cast="saku"] { --tone: var(--saku); }
+.char {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+  animation: breathe 5s ease-in-out infinite;
+  -webkit-mask-image: linear-gradient(to bottom, #000 74%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 74%, transparent 100%);
+}
+@keyframes breathe {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.012); }
+}
+.char.nod { animation: nod .55s ease-in-out; }
+@keyframes nod {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(1.4%); }
+}
+.char .base { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.char .p { position: absolute; height: auto; max-width: none; opacity: 0; pointer-events: none; }
+.char .smile, .char .smile-peak { transition: opacity .28s ease; }
+.char.is-smile .smile, .char.is-peak .smile-peak { opacity: 1; }
+.char.is-peak .smile { opacity: 0; }
+.char.is-half .eye-half, .char.is-closed .eye-closed { opacity: 1; }
+.char iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; color-scheme: dark; opacity: 0; pointer-events: none; }
+.char.is-live { animation: none; }
+.char.is-live iframe { opacity: 1; pointer-events: auto; }
+.char.is-live .base, .char.is-live .p { visibility: hidden; }
+
+.talk {
+  position: relative;
+  z-index: 3;
+  /* 収まらないとき（横向き・文字が大きい）だけ縮んでスクロールする。縦持ちでは収まるので見え方は変わらない */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0 20px calc(14px + env(safe-area-inset-bottom));
+}
+.speaker { font-size: .85rem; line-height: 1.6; letter-spacing: .3em; color: var(--tone); }
+.line {
+  min-height: calc(3 * 1.08rem * 1.8);
+  margin-top: .15rem;
+  font-size: 1.08rem;
+  line-height: 1.8;
+  letter-spacing: .06em;
+  text-shadow: 0 0 1em rgba(10, 10, 25, .9);
+}
+.line.in { animation: rise .45s ease both; }
+@keyframes rise {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+.choices { display: grid; gap: 10px; margin-top: .7rem; }
+.choice {
+  min-height: 52px;
+  padding: .5rem 1rem;
+  border: 1px solid rgba(255, 201, 122, .42);
+  border-radius: 12px;
+  background: rgba(15, 15, 36, .72);
+  font-size: 1rem;
+  line-height: 1.5;
+  letter-spacing: .1em;
+  cursor: pointer;
+  transition: opacity .35s ease, background .2s ease, border-color .2s ease;
+}
+.choice:active { background: rgba(255, 201, 122, .14); }
+@media (hover: hover) { .choice:hover { border-color: var(--lamp); } }
+.choices.wait .choice { opacity: 0; visibility: hidden; transition: opacity .35s ease, visibility 0s linear .35s; }
+.choices.wait .choice.chosen { opacity: 1; visibility: visible; border-color: var(--lamp-bright); background: rgba(255, 201, 122, .16); }
+.dots { display: flex; justify-content: center; gap: 8px; margin-top: .8rem; }
+.dots li { width: 6px; height: 6px; border-radius: 50%; background: rgba(245, 242, 234, .22); transition: background .3s ease; }
+.dots li.done { background: var(--lamp); }
+
+/* ── 一杯とおわり ── */
+.result.nagi { --tone: var(--nagi); }
+.result.saku { --tone: var(--saku); }
+.result { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.result-in {
+  min-height: 100%;
+  padding: calc(60px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom));
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 30%, rgba(255, 201, 122, .1) 0%, rgba(255, 201, 122, 0) 55%), var(--night);
+}
+.rv { opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity .9s ease, transform .9s ease, visibility 0s linear .9s; }
+.rv.on { opacity: 1; visibility: visible; transform: none; transition: opacity .9s ease, transform .9s ease, visibility 0s; }
+.r-head { font-size: 1rem; font-weight: 500; line-height: 1.6; letter-spacing: .2em; color: var(--paper-dim); }
+.r-head::after {
+  content: "";
+  display: block;
+  width: 7rem;
+  height: 2px;
+  margin: .6rem auto 0;
+  background: linear-gradient(to right, rgba(255, 201, 122, 0), var(--lamp) 50%, rgba(255, 201, 122, 0));
+}
+.drink {
+  position: relative;
+  width: min(74%, 20rem);
+  aspect-ratio: 4 / 5;
+  margin: 1.4rem auto 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: linear-gradient(170deg, #1d1d3c 0%, #0d0d1f 100%);
+  box-shadow: 0 0 0 1px rgba(255, 201, 122, .18), 0 24px 48px -20px rgba(0, 0, 0, .9), 0 0 70px -20px rgba(255, 201, 122, .3);
+}
+.drink img { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .6s ease; }
+.drink img.ok { opacity: 1; }
+.drink-name { margin-top: 1.2rem; font-size: 1.45rem; font-weight: 500; line-height: 1.6; letter-spacing: .12em; color: var(--lamp-bright); }
+.drink-line { margin-top: .7rem; font-size: 1.02rem; line-height: 1.9; letter-spacing: .06em; }
+/* キャストの一言が一、二文字だけ次の行に落ちないように（対応していないブラウザでは無視される） */
+.line, .drink-line, .close-line { text-wrap: balance; line-break: strict; }
+@supports (word-break: auto-phrase) {
+  .line, .drink-line, .close-line { word-break: auto-phrase; }
+}
+.said::before { content: "「"; }
+.said::after { content: "」"; }
+.shares { display: flex; justify-content: center; gap: 10px; margin-top: 1.4rem; }
+.shares button {
+  flex: 1 1 0;
+  max-width: 11rem;
+  min-height: 48px;
+  padding: .45rem .8rem;
+  border: 1px solid rgba(255, 201, 122, .55);
+  border-radius: 999px;
+  background: rgba(255, 201, 122, .08);
+  color: var(--lamp-bright);
+  font-size: .95rem;
+  letter-spacing: .1em;
+  cursor: pointer;
+}
+.end { margin-top: 3rem; padding-top: 2.2rem; border-top: 1px solid rgba(255, 201, 122, .16); }
+.close-line { font-size: 1.02rem; line-height: 1.9; letter-spacing: .06em; color: var(--tone); }
+.end-words { margin-top: 1.4rem; font-size: 1.35rem; line-height: 1.8; letter-spacing: .2em; }
+.end-btns { display: grid; gap: 10px; max-width: 18rem; margin: 1.4rem auto 0; }
+.end-btns button, .end-btns a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
+  padding: .45rem 1rem;
+  border: 1px solid rgba(245, 242, 234, .32);
+  border-radius: 12px;
+  background: rgba(15, 15, 36, .6);
+  font-size: 1rem;
+  line-height: 1.5;
+  letter-spacing: .1em;
+  text-decoration: none;
+  cursor: pointer;
+}
+.end-btns .first { border-color: rgba(255, 201, 122, .65); color: var(--lamp-bright); }
+.end .status { margin-top: 1.6rem; }
+.result .note { margin: 2.2rem auto 0; max-width: 22rem; }
+/* 下に続きがあるしるし（自動では送らない。おわりの段が見えたら消える） */
+.more {
+  position: sticky;
+  bottom: 0;
+  height: 72px;
+  margin-top: -72px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--night) 18%, rgba(26, 27, 58, 0));
+  color: var(--lamp);
+  opacity: 0;
+  transition: opacity .6s ease;
+  pointer-events: none;
+}
+.more.on { opacity: 1; }
+.more svg { width: 24px; height: 24px; animation: hint 2.4s ease-in-out infinite; }
+@keyframes hint {
+  0%, 100% { transform: translateY(0); opacity: .55; }
+  50% { transform: translateY(5px); opacity: 1; }
+}
+
+/* ── 保存の案内（共有もダウンロードも効かないとき、絵を大きく出す） ── */
+.saveview {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: calc(64px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  border: 0;
+  background: rgba(5, 5, 6, .95);
+  color: var(--paper);
+}
+.saveview[open] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; }
+.saveview::backdrop { background: rgba(5, 5, 6, .6); }
+.saveview img { width: auto; max-width: min(100%, 540px); max-height: calc(100svh - 11rem); border-radius: 6px; -webkit-touch-callout: default; }
+.saveview-hint { font-size: .95rem; line-height: 1.6; letter-spacing: .14em; color: var(--lamp-bright); }
+.saveview-close {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 10px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(245, 242, 234, .28);
+  border-radius: 50%;
+  background: rgba(10, 10, 25, .55);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.saveview-close svg { width: 20px; height: 20px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lantern, .char, .char.nod, .line.in, .more svg { animation: none; }
+  .lantern { opacity: .8; }
+  .door-frame, .door-frame > img, .veil, .door-ui, .door-foot { transition: none; }
+  .door.zoom .door-frame { transform: translate(-50%, -50%); }
+  .screen, .screen.on, .rv, .rv.on { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <button class="mute" type="button" data-act="mute" aria-pressed="false" aria-label="音を切る">
+    <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+    <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></svg>
+  </button>
+
+  <section class="screen door on" id="door">
+    <div class="door-frame">
+      <img src="../img/door0.jpg" alt="夜の石造りの建物。ランタンの灯る木の扉" width="800" height="1421">
+      <img class="f1" src="../img/door1.jpg" alt="" width="800" height="1421">
+      <img class="f2" src="../img/door2.jpg" alt="" width="800" height="1421">
+      <img class="f3" src="../img/door3.jpg" alt="" width="800" height="1421">
+      <div class="lantern" aria-hidden="true"></div>
+      <div class="door-ui">
+        <div class="door-logo"><img src="../img/logo.png" alt="Liminal" width="920" height="361"></div>
+        <h1 class="door-title" data-ui="title"></h1>
+      </div>
+    </div>
+    <div class="veil" aria-hidden="true"></div>
+    <div class="door-foot">
+      <p class="lead" data-ui="lead"></p>
+      <button class="cue" type="button" data-act="open" data-ui="door" disabled></button>
+      <span class="status" data-ui="preopen"></span>
+      <p class="note" data-ui="note"></p>
+      <!-- data.json が読めないときだけ出す（この一行だけは data.json に置けないのでここに直書き） -->
+      <p class="loadfail" id="loadfail" role="alert" hidden>読み込めませんでした。電波のよいところで、もう一度開いてください。</p>
+    </div>
+  </section>
+
+  <section class="screen pick" id="pick">
+    <h2 data-ui="seat"></h2>
+    <div class="seats">
+      <button class="seat-btn nagi" type="button" data-act="seat" data-cast="nagi"><img src="../img/nagi.jpg" alt="" width="660" height="825"><span data-name="nagi"></span></button>
+      <button class="seat-btn saku" type="button" data-act="seat" data-cast="saku"><img src="../img/saku.jpg" alt="" width="660" height="825"><span data-name="saku"></span></button>
+    </div>
+    <p class="note" data-ui="note"></p>
+  </section>
+
+  <section class="screen counter" id="counter">
+    <div class="stage">
+      <figure class="who" data-cast="nagi">
+        <div class="char" data-cast="nagi">
+          <img class="base" src="../img/nagi_c.webp" alt="凪。黒髪に青いインナーカラー、紫の花の髪飾り" width="700" height="960">
+          <img class="p eye-half" src="../img/nagi_eye_half.webp" alt="" width="346" height="167" style="left:25.143%;top:43.646%;width:49.429%">
+          <img class="p eye-closed" src="../img/nagi_eye_closed.webp" alt="" width="347" height="178" style="left:25.143%;top:42.708%;width:49.571%">
+          <img class="p smile" src="../img/nagi_smile.webp" alt="" width="420" height="260" style="left:20.857%;top:36.458%;width:60.0%">
+          <img class="p smile-peak" src="../img/nagi_smile_peak.webp" alt="" width="420" height="380" style="left:20.857%;top:36.458%;width:60.0%">
+        </div>
+      </figure>
+      <figure class="who" data-cast="saku">
+        <div class="char" data-cast="saku">
+          <img class="base" src="../img/saku_c.webp" alt="朔。茶色の髪に星の髪飾り、琥珀色の目" width="700" height="960">
+          <img class="p eye-half" src="../img/saku_eye_half.webp" alt="" width="398" height="225" style="left:19.429%;top:36.979%;width:56.857%">
+          <img class="p eye-closed" src="../img/saku_eye_closed.webp" alt="" width="388" height="225" style="left:19.857%;top:36.979%;width:55.429%">
+          <img class="p smile" src="../img/saku_smile.webp" alt="" width="430" height="420" style="left:18.0%;top:35.938%;width:61.429%">
+          <img class="p smile-peak" src="../img/saku_smile_peak.webp" alt="" width="430" height="420" style="left:18.0%;top:35.938%;width:61.429%">
+        </div>
+      </figure>
+    </div>
+    <div class="talk">
+      <p class="speaker" id="speaker"></p>
+      <p class="line" id="line" aria-live="polite"></p>
+      <div class="choices wait" id="choices">
+        <button class="choice" type="button" data-act="choice" data-i="0"></button>
+        <button class="choice" type="button" data-act="choice" data-i="1"></button>
+        <button class="choice" type="button" data-act="choice" data-i="2"></button>
+      </div>
+      <ol class="dots" id="dots" aria-hidden="true"><li></li><li></li><li></li><li></li><li></li></ol>
+    </div>
+  </section>
+
+  <section class="screen result" id="result">
+    <div class="result-in">
+      <h2 class="r-head rv" id="r-head"></h2>
+      <figure class="drink rv" id="r-fig"><img id="r-img" alt=""></figure>
+      <p class="drink-name rv" id="r-name"></p>
+      <p class="drink-line said rv" id="r-line"></p>
+      <div class="shares rv" id="r-shares">
+        <button type="button" id="share" data-act="share" data-ui="share_x"></button>
+        <button type="button" id="save" data-act="save" data-ui="save_image"></button>
+      </div>
+      <div class="end" id="end">
+        <p class="close-line said rv" id="r-close"></p>
+        <p class="end-words rv" id="r-end" data-ui="end"></p>
+        <div class="end-btns rv" id="r-btns">
+          <button class="first" type="button" data-act="again" data-ui="again"></button>
+          <button type="button" data-act="other" id="other"></button>
+          <a href="../" data-ui="about"></a>
+        </div>
+        <span class="status rv" id="r-status" data-ui="preopen"></span>
+      </div>
+      <p class="note" data-ui="note"></p>
+    </div>
+    <div class="more" id="more" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
+  </section>
+
+  <dialog class="saveview" id="saveview" data-act="unview" aria-labelledby="saveview-hint">
+    <img id="saveview-img" alt="">
+    <p class="saveview-hint" id="saveview-hint"></p>
+    <button class="saveview-close" type="button" data-act="unview" aria-label="閉じる">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </dialog>
+
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

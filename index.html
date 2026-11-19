@@ -339,6 +339,30 @@ h2::after {
 .creed { padding: 5.5rem 24px; text-align: center; }
 .creed p { font-size: 1rem; line-height: 2.5; letter-spacing: .08em; }
 
+/* ── 今夜の一杯（ブラウザの遊びへの入口） ── */
+.ippai { padding-top: 1rem; padding-bottom: 5.5rem; }
+.ippai-card {
+  display: grid;
+  grid-template-columns: 38% 1fr;
+  align-items: center;
+  max-width: 40rem;
+  margin: 0 auto;
+  border: 1px solid rgba(255, 201, 122, .22);
+  border-radius: 6px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #23244a 0%, #17172f 100%);
+  color: inherit;
+  text-decoration: none;
+}
+.ippai-card:hover { border-color: rgba(255, 201, 122, .55); }
+.ippai-card:focus-visible { outline: 2px solid var(--lamp-bright); outline-offset: 4px; }
+.ippai-card > img { display: block; width: 100%; height: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
+.ippai-text { padding: 1.2rem 1.3rem 1.4rem; }
+.ippai-kicker { color: var(--paper-dim); font-size: .8rem; letter-spacing: .14em; line-height: 1.7; }
+.ippai-text h3 { font-size: 1.25rem; font-weight: 500; letter-spacing: .18em; color: var(--lamp-bright); line-height: 1.7; }
+.ippai-text .ippai-lead { margin-top: .4rem; font-size: .95rem; line-height: 1.9; }
+.ippai-text .status { margin-top: .9rem; }
+
 /* ── できること ── */
 .can { padding-top: 1rem; }
 .can-grid { display: grid; gap: 20px; margin-top: 3rem; }
@@ -572,6 +596,18 @@ footer p { margin-top: .9rem; }
         <a class="x" href="https://x.com/liminal_saku" rel="noopener">朔の毎日を X で見る</a>
       </div>
     </div>
+  </section>
+
+  <section class="ippai wrap">
+    <a class="ippai-card" href="ippai/">
+      <img src="ippai/img/drink/nagi-1.jpg" alt="カウンターに置かれた、氷の入ったミルク色のカクテル" width="1080" height="1350" loading="lazy">
+      <div class="ippai-text">
+        <p class="ippai-kicker">ブラウザで、3分ほど</p>
+        <h3>今夜の一杯</h3>
+        <p class="ippai-lead">カウンターで五つだけ答えると、凪か朔が、今夜の一杯を選んでくれます。アプリを入れなくても遊べます。</p>
+        <span class="status">席に座ってみる</span>
+      </div>
+    </a>
   </section>
 
   <div class="creed">

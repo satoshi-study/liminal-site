@@ -636,6 +636,13 @@ async function load() {
     if (!greeted && e.intersectionRatio >= 0.6) { greeted = true; setTimeout(() => express('smile'), 900); }
   }, {threshold: [0, 0.05, 0.6]}).observe(cv);
   document.addEventListener('visibilitychange', kick);
+  // 親ページから表情とうなずきを受ける（express は持っていない表情と表情中を自分で無視する）
+  addEventListener('message', e => {
+    const d = e.data;
+    if (e.source !== parent || !d || typeof d !== 'object' || d.liminalCast !== CAST) return;
+    if (d.cmd === 'express' && ['smile', 'shy', 'smirk'].includes(d.kind)) express(d.kind);
+    else if (d.cmd === 'nod') head.y.v += C.nodAns * S.k;
+  });
   frame();
   parent.postMessage({liminalCast: CAST, ready: true}, '*');
 }

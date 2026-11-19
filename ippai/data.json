@@ -1,0 +1,424 @@
+{
+  "ui": {
+    "title": "今夜の一杯",
+    "lead": "カウンターで、五つだけ答える。",
+    "door": "扉をひらく",
+    "seat": "今日は、誰の席に座りますか？",
+    "result_heading": "今夜の一杯 ｜ {cast}",
+    "share_x": "X で見せる",
+    "save_image": "画像を保存",
+    "end": "続きは、お店で。",
+    "again": "もう一杯",
+    "other_seat": "{cast}の席にも座る",
+    "about": "Liminal とは",
+    "preopen": "iPhone アプリとして開店準備中",
+    "store_url": "",
+    "share_text": "今夜の一杯は「{drink}」。{cast}が選んでくれた。 #Liminal",
+    "result_cta": "あなたの一杯も、選んでもらう",
+    "note": "凪と朔は AI のキャストです。台詞と声はあらかじめ用意したものです。お酒は二十歳になってから。"
+  },
+  "casts": {
+    "nagi": {
+      "name": "凪",
+      "tie": "quiet",
+      "greet": {
+        "text": "いらっしゃい。……どうぞ",
+        "voice": "enter_first",
+        "face": "smile"
+      },
+      "intro": {
+        "text": "……今夜の一杯、私が選んでもいい？　少しだけ、聞かせて",
+        "voice": "intro",
+        "face": null
+      },
+      "questions": [
+        {
+          "text": "今日は、どんな一日だった？",
+          "voice": "q1",
+          "axis": "A",
+          "choices": [
+            {
+              "label": "長かった",
+              "score": -1,
+              "reply": "そっか。……おつかれさま",
+              "face": null
+            },
+            {
+              "label": "いつもどおり",
+              "score": 0,
+              "reply": "そっかそっか。そういう日の一杯が、いちばんおいしいかも",
+              "face": "smile"
+            },
+            {
+              "label": "ちょっといい日",
+              "score": 1,
+              "reply": "へえ、いいじゃん。……あとで聞かせて",
+              "face": "smile"
+            }
+          ]
+        },
+        {
+          "text": "今は、話したい？　それとも、静かにしてたい？",
+          "voice": "q2",
+          "axis": "B",
+          "choices": [
+            {
+              "label": "話したい",
+              "score": 1,
+              "reply": "うん、聞くよ。……先に、もう少しだけ聞かせて",
+              "face": "smile"
+            },
+            {
+              "label": "静かにしてたい",
+              "score": -1,
+              "reply": "うん。話さなくても、いいよ",
+              "face": null
+            },
+            {
+              "label": "どっちでもいい",
+              "score": 0,
+              "reply": "まあね。座ってから決めればいいよ",
+              "face": null
+            }
+          ]
+        },
+        {
+          "text": "明日の朝は、早い？",
+          "voice": "q3",
+          "axis": "A",
+          "choices": [
+            {
+              "label": "早い",
+              "score": -1,
+              "reply": "そっか。じゃあ、軽めにしとくね",
+              "face": "smile"
+            },
+            {
+              "label": "ふつう",
+              "score": 0,
+              "reply": "まあね。そんなもんだよね",
+              "face": null
+            },
+            {
+              "label": "休み",
+              "score": 1,
+              "reply": "いいな。……ちょっと、うらやましい",
+              "face": "smile"
+            }
+          ]
+        },
+        {
+          "text": "席は、どのへんがいい？",
+          "voice": "q4",
+          "axis": "B",
+          "choices": [
+            {
+              "label": "カウンターの端",
+              "score": -1,
+              "reply": "わかる。私も、端が好き",
+              "face": "smile"
+            },
+            {
+              "label": "真ん中",
+              "score": 1,
+              "reply": "じゃあ……私の正面だね",
+              "face": "shy"
+            },
+            {
+              "label": "おまかせ",
+              "score": 0,
+              "reply": "じゃあ、ランタンの近くにしよっか",
+              "face": null
+            }
+          ]
+        },
+        {
+          "text": "最後。甘いのと、すっきりしたの、どっちの気分？",
+          "voice": "q5",
+          "axis": "A",
+          "choices": [
+            {
+              "label": "甘いの",
+              "score": -1,
+              "reply": "うん。甘いの、いいよね",
+              "face": "smile"
+            },
+            {
+              "label": "すっきりしたの",
+              "score": 1,
+              "reply": "すっきりね。……わかった",
+              "face": null
+            },
+            {
+              "label": "おまかせ",
+              "score": 0,
+              "reply": "……じゃあ、私が決めるね",
+              "face": "smile"
+            }
+          ]
+        }
+      ],
+      "serve": {
+        "text": "……はい。今夜の一杯",
+        "voice": "serve",
+        "face": "smile"
+      },
+      "close": {
+        "text": "……ゆっくりしていって",
+        "voice": "close",
+        "face": "smile"
+      },
+      "drinks": [
+        {
+          "id": "nagi-1",
+          "taste": "soft",
+          "mood": "quiet",
+          "name": "紅茶のミルクカクテル",
+          "line": "私の好きなミルクティーを、お酒にしたやつ。……甘さは、少しだけ足した",
+          "voice": "r1"
+        },
+        {
+          "id": "nagi-2",
+          "taste": "soft",
+          "mood": "talk",
+          "name": "カルーアミルク",
+          "line": "話は、甘いのと一緒のほうがいいから",
+          "voice": "r2"
+        },
+        {
+          "id": "nagi-3",
+          "taste": "usual",
+          "mood": "quiet",
+          "name": "ホットワイン",
+          "line": "湯気を見てるだけでも、いいと思う",
+          "voice": "r3"
+        },
+        {
+          "id": "nagi-4",
+          "taste": "usual",
+          "mood": "talk",
+          "name": "梅酒のソーダ割り",
+          "line": "いつもの味。……で、何から話す？",
+          "voice": "r4"
+        },
+        {
+          "id": "nagi-5",
+          "taste": "bright",
+          "mood": "quiet",
+          "name": "ジントニック",
+          "line": "すっきりしたのを、ゆっくり。……悪くないでしょ",
+          "voice": "r5"
+        },
+        {
+          "id": "nagi-6",
+          "taste": "bright",
+          "mood": "talk",
+          "name": "モスコミュール",
+          "line": "……乾杯、しよっか。今日の話、聞かせて",
+          "voice": "r6"
+        }
+      ]
+    },
+    "saku": {
+      "name": "朔",
+      "tie": "talk",
+      "greet": {
+        "text": "いらっしゃい。……初めての顔だ",
+        "voice": "enter_first",
+        "face": "smile"
+      },
+      "intro": {
+        "text": "ね、今夜の一杯、私が決めていい？　ちょっとだけ質問",
+        "voice": "intro",
+        "face": "smirk"
+      },
+      "questions": [
+        {
+          "text": "今日、どんな日だった？",
+          "voice": "q1",
+          "axis": "A",
+          "choices": [
+            {
+              "label": "長かった",
+              "score": -1,
+              "reply": "うわ、おつかれ。ここ、セーブポイントだから",
+              "face": "smile"
+            },
+            {
+              "label": "いつもどおり",
+              "score": 0,
+              "reply": "ん、平和でよし。そういう日のほうが、喉かわくよね。なんでだろ",
+              "face": null
+            },
+            {
+              "label": "ちょっといい日",
+              "score": 1,
+              "reply": "お、いいじゃん。レアなやつ引いた日だ",
+              "face": "smirk"
+            }
+          ]
+        },
+        {
+          "text": "しゃべりたい気分？　それとも、ぼーっとしたい？",
+          "voice": "q2",
+          "axis": "B",
+          "choices": [
+            {
+              "label": "話したい",
+              "score": 1,
+              "reply": "いいよ、聞く聞く。……先に飲みもの決めさせて",
+              "face": "smile"
+            },
+            {
+              "label": "静かにしてたい",
+              "score": -1,
+              "reply": "わかる。私も今、ちょっとぼーっとしてた",
+              "face": null
+            },
+            {
+              "label": "どっちでもいい",
+              "score": 0,
+              "reply": "ん、じゃあ流れで",
+              "face": null
+            }
+          ]
+        },
+        {
+          "text": "明日の朝、早い？",
+          "voice": "q3",
+          "axis": "A",
+          "choices": [
+            {
+              "label": "早い",
+              "score": -1,
+              "reply": "あー、じゃあ軽めにしとく。明日の自分のために",
+              "face": "smile"
+            },
+            {
+              "label": "ふつう",
+              "score": 0,
+              "reply": "ん、通常営業だ",
+              "face": null
+            },
+            {
+              "label": "休み",
+              "score": 1,
+              "reply": "お、いいね。夜更かしできるやつだ",
+              "face": "smirk"
+            }
+          ]
+        },
+        {
+          "text": "席、どこにする？",
+          "voice": "q4",
+          "axis": "B",
+          "choices": [
+            {
+              "label": "カウンターの端",
+              "score": -1,
+              "reply": "端っこね。落ち着くよね、壁があると",
+              "face": "smile"
+            },
+            {
+              "label": "真ん中",
+              "score": 1,
+              "reply": "お、正面。……ちょっと緊張するな",
+              "face": "shy"
+            },
+            {
+              "label": "おまかせ",
+              "score": 0,
+              "reply": "じゃあここ。私から一番近いとこ",
+              "face": "smirk"
+            }
+          ]
+        },
+        {
+          "text": "最後ね。甘いのと、すっきりしたの、どっち？",
+          "voice": "q5",
+          "axis": "A",
+          "choices": [
+            {
+              "label": "甘いの",
+              "score": -1,
+              "reply": "甘いのね。了解",
+              "face": "smile"
+            },
+            {
+              "label": "すっきりしたの",
+              "score": 1,
+              "reply": "すっきり。いいね",
+              "face": null
+            },
+            {
+              "label": "おまかせ",
+              "score": 0,
+              "reply": "ん、まかされた",
+              "face": "smirk"
+            }
+          ]
+        }
+      ],
+      "serve": {
+        "text": "はい、今夜の一杯",
+        "voice": "serve",
+        "face": "smile"
+      },
+      "close": {
+        "text": "ん、ゆっくりしてって",
+        "voice": "close",
+        "face": "smile"
+      },
+      "drinks": [
+        {
+          "id": "saku-1",
+          "taste": "soft",
+          "mood": "quiet",
+          "name": "ラム入りホットミルク",
+          "line": "宿屋で一晩、みたいなやつ。全回復とはいかないけど",
+          "voice": "r1"
+        },
+        {
+          "id": "saku-2",
+          "taste": "soft",
+          "mood": "talk",
+          "name": "カシスミルク",
+          "line": "甘いやつ。……で、今日の話、最初から聞かせて",
+          "voice": "r2"
+        },
+        {
+          "id": "saku-3",
+          "taste": "usual",
+          "mood": "quiet",
+          "name": "ハイボール",
+          "line": "ふつうのハイボール。ふつうが一番むずかしいんだよね。なんでだろ",
+          "voice": "r3"
+        },
+        {
+          "id": "saku-4",
+          "taste": "usual",
+          "mood": "talk",
+          "name": "アイリッシュコーヒー",
+          "line": "クリームのってるほう。混ぜるか混ぜないかで、ちょっと話せるでしょ",
+          "voice": "r4"
+        },
+        {
+          "id": "saku-5",
+          "taste": "bright",
+          "mood": "quiet",
+          "name": "メロンソーダのカクテル",
+          "line": "緑のやつ。……見てるだけで、ちょっと楽しいから",
+          "voice": "r5"
+        },
+        {
+          "id": "saku-6",
+          "taste": "bright",
+          "mood": "talk",
+          "name": "レモンサワー",
+          "line": "乾杯しよ、ほら。……で、何があったの",
+          "voice": "r6"
+        }
+      ]
+    }
+  }
+}
